@@ -1,20 +1,29 @@
 # 发布流程与红线
 
-> **2026-08-30 事故教训（最高优先级）**：合成键入（window_event type）在 X 编辑器里会静默丢弃中文字符（只留下 ASCII 数字），导致误发「1530」。
-> 由此立三条铁律：
-> 1. **中文内容一律走剪贴板**：`write_clipboard(内容)` → 点编辑器聚焦 → `key cmd+v` 粘贴。禁止对 X 编辑器使用 `type` 键入中文。
-> 2. **发布键默认在人手里（过渡期）**：AI 负责把内容粘进编辑器，回读确认（字符计数器数值与内容长度一致）后，请用户过目点「发帖」；用户明确说「你来发」才可代点。
-> 3. **宁可发不出，不可发错**：任何编辑器内容无法核对的情况（树里看不到文本、计数器不匹配），一律停下报告，不点发布。
+## 主路径（默认）：push_draft.mjs 快速灌草稿
+
+专用 Chrome（独立配置档 + CDP）：启动一次即可——
+`open -na "Google Chrome" --args --user-data-dir=$HOME/.zcode/x-ops-profile --remote-debugging-port=9222 --no-first-run https://x.com/login`
+（登录态永久保存在该配置档；playwright-core 装在 `$HOME/.zcode/x-ops/`）
+
+流程：`node $SKILL_DIR/scripts/push_draft.mjs @草稿文件` →
+打开编辑器 → CDP `keyboard.insertText` 写入（中文可靠）→ DOM 回读逐字校验 → 点关闭 → `confirmationSheetConfirm`（保存）→ 重开面板回读验证。
+
+已验证事实（2026-08-31）：
+- X 编辑器丢弃合成键入的中文（CGEvent 级），CDP insertText 不丢——**中文只走 insertText**
+- 关闭编辑器必弹确认框：`confirmationSheetConfirm`=保存、`confirmationSheetCancel`=丢弃
+- XHunt 等插件的悬浮层会拦截 Playwright 常规点击——**关键点击一律 JS 直派（el.click()）**
+- 草稿入口 testid：`unsentButton`；编辑器 `tweetTextarea_0`；关闭 `app-bar-close`；发帖 `tweetButton`；预排期 `scheduleOption`
+- 单条 3–5 秒；15 条循环调用约 1–2 分钟，全程不占用用户正在用的 Chrome
+
+computer-use 降级为兜底（脚本链路不可用时才用），流程同下。
 
 ## 放行流程（用户说「放行推特」）
 
 1. 读当日草稿箱，只处理标 ✅ 的条目（用户改完手动打勾）；⬜ 的跳过并在汇报中列出。
-2. computer-use 在用户 Chrome（已登录 @vill1y）操作 x.com：
-   - 点「发帖」打开编辑器 → 点编辑区聚焦 → 剪贴板粘贴内容 → 核对计数器 → 用户确认 → 发布
-   - 定时的：用 X 自带排期（编辑器内日历/时钟图标选时间）
-   - **推荐默认：粘完直接存草稿**（关闭编辑器 → 存草稿），帖子进 X 原生草稿箱，用户在手机/网页里自己审、自己发——AI 完全不碰发布键
-3. 每条成功后写入 `复盘/发布日志.md`：时间｜类型｜首句｜帖子链接（用于查重与复盘反查）。
-4. 单次批量 ≤10 条；间隔用原生排期实现（每小时最多 2 条，7:30–23:30）。
+2. 逐条调用 push_draft.mjs 灌进 X 原生草稿箱（或用 `scheduleOption` 走原生预排期）；每条日志写入 `复盘/发布日志.md`。
+3. 用户在手机/网页的 X 草稿箱里审、自己点发布——**AI 不碰发布键**。
+4. 用户明确授权 X API 按量直发后，才可切换为 API 自动发布（普通帖 $0.015/条）。
 
 ## 红线（任何情况下不越过）
 
