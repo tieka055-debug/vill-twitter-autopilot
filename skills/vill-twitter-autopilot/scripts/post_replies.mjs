@@ -9,11 +9,14 @@ const require2 = createRequire(
 const { chromium } = require2('playwright-core');
 
 const file = process.argv[2];
-const gapSec = Number(process.argv[3] ?? 50);
+const gapMin = Number(process.argv[3] ?? 40); // 随机间隔下限（秒）——固定间隔是机器人特征
+const gapMax = Number(process.argv[4] ?? 110);
 if (!file) {
-  console.error('用法：node post_replies.mjs @replies.json [间隔秒]');
+  console.error('用法：node post_replies.mjs @replies.json [最小间隔秒] [最大间隔秒]');
   process.exit(1);
 }
+if (gapMax < gapMin) { console.error('最大间隔不能小于最小间隔'); process.exit(1); }
+const nextGap = () => Math.round((gapMin + Math.random() * (gapMax - gapMin)) * 10) / 10;
 const items = JSON.parse(readFileSync(file.slice(1), 'utf8'));
 const flat = (s) => s.replace(/\s+/g, '');
 
@@ -51,7 +54,9 @@ for (let i = 0; i < items.length; i++) {
   }
   results.push(r);
   if (i < items.length - 1) {
-    await page.waitForTimeout(gapSec * 1000);
+    const wait = nextGap();
+    r.waitedSec = wait;
+    await page.waitForTimeout(wait * 1000);
   }
 }
 
